@@ -5,11 +5,31 @@
     <title>OBS 表示画面</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
-        #player { width: 100%; height: 100%; border: none; }
+        #player { width: 100%; height: 100%; border: none; z-index: 1; }
+
+        /* 【追加】テロップの最小限のスタイル設定 */
+        #telop-container {
+            position: absolute;
+            bottom: 50px;           /* 画面下部から50px上に配置 */
+            left: 5%;
+            width: 90%;
+            background: rgba(0, 0, 0, 0.8); /* 黒背景（透過80%） */
+            color: white;           /* 白文字 */
+            font-family: sans-serif;
+            font-size: 32px;        /* 大きめの文字サイズ */
+            font-weight: bold;
+            text-align: center;
+            padding: 15px 0;
+            border-radius: 8px;
+            z-index: 999;           /* YouTubeプレイヤーより手前に表示 */
+            display: none;          /* 初期状態は非表示 */
+        }
     </style>
     <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 <body>
+
+<div id="telop-container"></div>
 
 <div id="player"></div>
 
@@ -19,69 +39,61 @@
     
     let player = null;
     let pendingVideoId = null;
+    const telopContainer = document.getElementById("telop-container");
 
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('player', {
-            height: '100%',
-            width: '100%',
-            playerVars: {
-                'autoplay': 1,
-                'controls': 0,
-                'rel': 0,
-                'cc_load_policy': 0, // デフォルトオフ（効かない動画用に対策を追加）
-                'iv_load_policy': 3
-            },
+            height: '100%', width: '100%',
+            playerVars: { 'autoplay': 1, 'controls': 0, 'rel': 0, 'cc_load_policy': 0, 'iv_load_policy': 3 },
             events: {
                 'onReady': onPlayerReady,
-                'onStateChange': onPlayerStateChange // ★動画の状態変化を監視するイベントを追加
+                'onStateChange': onPlayerStateChange
             }
         });
     }
-
     function onPlayerReady(event) {
         event.target.unloadModule("captions");
-        if (pendingVideoId) {
-            loadNewVideo(pendingVideoId);
-            pendingVideoId = null;
-        }
+        if (pendingVideoId) { loadNewVideo(pendingVideoId); pendingVideoId = null; }
     }
-
-    // ★動画の状態が変わったときに呼ばれる関数
     function onPlayerStateChange(event) {
-        // YT.PlayerState.PLAYING (値は 1) ＝ 動画の再生が実際に始まったとき
         if (event.data === YT.PlayerState.PLAYING) {
-            // 再生が始まった瞬間に、字幕モジュールを強制的にアンロードする
             event.target.unloadModule("captions");
-            console.log("動画再生を検知：字幕をオフにしました");
         }
     }
-
     function loadNewVideo(videoId) {
         if (player && typeof player.loadVideoById === 'function') {
-            // 動画切り替え時にも初期設定を引き継ぐ
-            player.loadVideoById({ 
-                videoId: videoId,
-                playerVars: { 'cc_load_policy': 0 }
-            });
-        } else {
-            pendingVideoId = videoId;
-        }
+            player.loadVideoById({ videoId: videoId, playerVars: { 'cc_load_policy': 0 } });
+        } else { pendingVideoId = videoId; }
     }
 
+    // WebSocketのメッセージ受信処理
     ws.onmessage = (event) => {
         try {
             const res = JSON.parse(event.data);
+            
+            // YouTubeの処理
             if (res.type === "youtube") {
                 loadNewVideo(res.data);
             }
+            
+            // 【追加】テロップの処理
+            if (res.type === "telop") {
+                if (res.action === "show") {
+                    // 文字を設定して画面に出す
+                    telopContainer.innerText = res.data;
+                    telopContainer.style.display = "block";
+                } else if (res.action === "hide") {
+                    // 画面から消す
+                    telopContainer.style.display = "none";
+                }
+            }
+
         } catch (e) {
             console.error("パースエラー:", e);
         }
     };
 
-    ws.onclose = () => {
-        setTimeout(() => { window.location.reload(); }, 5000);
-    };
+    ws.onclose = () => { setTimeout(() => { window.location.reload(); }, 5000); };
 </script>
 </body>
 </html>
