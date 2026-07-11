@@ -4,52 +4,84 @@
     <meta charset="UTF-8">
     <title>OBS 表示画面</title>
     <style>
-        /* OBS透過用の設定。背景を透明にし、画面いっぱいにプレイヤーを広げる */
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
-        #player-container { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
-        iframe { width: 100%; height: 100%; border: none; }
+        #player { width: 100%; height: 100%; border: none; }
     </style>
+    <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 <body>
 
-<div id="player-container">
-    </div>
+<div id="player"></div>
 
 <script>
     const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
     const ws = new WebSocket(wsProtocol + window.location.host + "/ws");
-    const container = document.getElementById("player-container");
+    
+    let player = null;
+    let pendingVideoId = null;
 
+    // YouTube APIの準備ができたら呼ばれる関数
+    function onYouTubeIframeAPIReady() {
+        // 初期状態では空のプレイヤーを作っておく（非表示にするためのダミーIDでも可）
+        player = new YT.Player('player', {
+            height: '100%',
+            width: '100%',
+            playerVars: {
+                'autoplay': 1,       // 自動再生
+                'controls': 0,       // YouTubeのコントロールバーを非表示
+                'rel': 0,            // 関連動画を非表示
+                'cc_load_policy': 0, // 字幕をデフォルトでオフにする設定（これだけだと効かない場合がある）
+                'iv_load_policy': 3  // アノテーションを非表示
+            },
+            events: {
+                'onReady': onPlayerReady
+            }
+        });
+    }
+
+    // プレイヤーの準備が完了したとき
+    function onPlayerReady(event) {
+        // 【最重要】ここで字幕（captions）モジュールを強制的にアンロードして消し去る
+        event.target.unloadModule("captions");
+        
+        // もしプレイヤー準備完了前にWebSocketで動画IDが届いていたら、ここで再生
+        if (pendingVideoId) {
+            loadNewVideo(pendingVideoId);
+            pendingVideoId = null;
+        }
+    }
+
+    // 動画を新しく読み込む関数
+    function loadNewVideo(videoId) {
+        if (player && typeof player.loadVideoById === 'function') {
+            // 字幕をアンロードしつつ、動画を読み込む
+            player.unloadModule("captions");
+            player.loadVideoById({ videoId: videoId });
+        } else {
+            // APIの準備がまだの場合は一時保存しておく
+            pendingVideoId = videoId;
+        }
+    }
+
+    // WebSocketのメッセージ受信処理
     ws.onmessage = (event) => {
         try {
             const res = JSON.parse(event.data);
             
-            // YouTubeの命令が来たらプレイヤーを書き換える
             if (res.type === "youtube") {
-                const videoId = res.data;
-                
-                // 埋め込み用URL（自動再生、音量コントロールなどのパラメータ付き）
-                // ※ブラウザの仕様上、自動再生を確実にするには「&mute=1」が必要な場合があります。必要に応じて調整してね。
-                container.innerHTML = `
-                    <iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowfullscreen>
-                    </iframe>
-                `;
+                loadNewVideo(res.data);
             }
             
-            // 将来ここに「else if (res.type === 'telop')」でテロップの処理を追加できる！
+            // 将来のテロップ用拡張スペース
+            // if (res.type === "telop") { ... }
 
         } catch (e) {
-            console.error("メッセージのパースに失敗しました:", e);
+            console.error("パースエラー:", e);
         }
     };
 
-    // 接続が切れたら5秒後に再接続を試みる（OBS起動時の対策）
     ws.onclose = () => {
-        setTimeout(() => {
-            window.location.reload();
-        }, 5000);
+        setTimeout(() => { window.location.reload(); }, 5000);
     };
 </script>
 </body>
