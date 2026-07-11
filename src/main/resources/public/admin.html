@@ -39,6 +39,13 @@
     ws.onopen = () => statusDiv.innerText = "サーバーに接続されました";
     ws.onclose = () => statusDiv.innerText = "サーバーから切断されました";
 
+    // 30秒ごとに生存確認（ハートビート）を送信して切断を防ぐ
+    setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "ping" }));
+        }
+    }, 30000); // 30000ミリ秒 = 30秒
+
     // YouTube用送信ロジック
     function extractVideoId(url) {
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;

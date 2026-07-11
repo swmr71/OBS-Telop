@@ -26,17 +26,20 @@ public class Main {
 
             ws.onMessage(ctx -> {
                 String message = ctx.message();
+                
+                // 【追加】生存確認（ping）のメッセージが来たら、何もせず処理を抜ける
+                if (message.contains("\"type\":\"ping\"")) {
+                    return;
+                }
+                
                 System.out.println("メッセージ受信: " + message);
-
-                clients.forEach(client -> {
-                    try {
+                
+                // 接続されているすべてのブラウザへそのまま転送
+                for (WsContext client : clients) {
+                    if (client.session().isOpen()) {
                         client.send(message);
-                    } catch (Exception ignored) {
-                        // 後で removeIf で除去
                     }
-                });
-
-                clients.removeIf(client -> !client.session.isOpen());
+                }
             });
         });
 
