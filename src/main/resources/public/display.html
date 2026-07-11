@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>OBS 表示画面</title>
+    <style>
+        /* OBS透過用の設定。背景を透明にし、画面いっぱいにプレイヤーを広げる */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+        #player-container { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+        iframe { width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body>
+
+<div id="player-container">
+    </div>
+
+<script>
+    const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+    const ws = new WebSocket(wsProtocol + window.location.host + "/ws");
+    const container = document.getElementById("player-container");
+
+    ws.onmessage = (event) => {
+        try {
+            const res = JSON.parse(event.data);
+            
+            // YouTubeの命令が来たらプレイヤーを書き換える
+            if (res.type === "youtube") {
+                const videoId = res.data;
+                
+                // 埋め込み用URL（自動再生、音量コントロールなどのパラメータ付き）
+                // ※ブラウザの仕様上、自動再生を確実にするには「&mute=1」が必要な場合があります。必要に応じて調整してね。
+                container.innerHTML = `
+                    <iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowfullscreen>
+                    </iframe>
+                `;
+            }
+            
+            // 将来ここに「else if (res.type === 'telop')」でテロップの処理を追加できる！
+
+        } catch (e) {
+            console.error("メッセージのパースに失敗しました:", e);
+        }
+    };
+
+    // 接続が切れたら5秒後に再接続を試みる（OBS起動時の対策）
+    ws.onclose = () => {
+        setTimeout(() => {
+            window.location.reload();
+        }, 5000);
+    };
+</script>
+</body>
+</html>
