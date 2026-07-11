@@ -20,61 +20,60 @@
     let player = null;
     let pendingVideoId = null;
 
-    // YouTube APIの準備ができたら呼ばれる関数
     function onYouTubeIframeAPIReady() {
-        // 初期状態では空のプレイヤーを作っておく（非表示にするためのダミーIDでも可）
         player = new YT.Player('player', {
             height: '100%',
             width: '100%',
             playerVars: {
-                'autoplay': 1,       // 自動再生
-                'controls': 0,       // YouTubeのコントロールバーを非表示
-                'rel': 0,            // 関連動画を非表示
-                'cc_load_policy': 0, // 字幕をデフォルトでオフにする設定（これだけだと効かない場合がある）
-                'iv_load_policy': 3  // アノテーションを非表示
+                'autoplay': 1,
+                'controls': 0,
+                'rel': 0,
+                'cc_load_policy': 0, // デフォルトオフ（効かない動画用に対策を追加）
+                'iv_load_policy': 3
             },
             events: {
-                'onReady': onPlayerReady
+                'onReady': onPlayerReady,
+                'onStateChange': onPlayerStateChange // ★動画の状態変化を監視するイベントを追加
             }
         });
     }
 
-    // プレイヤーの準備が完了したとき
     function onPlayerReady(event) {
-        // 【最重要】ここで字幕（captions）モジュールを強制的にアンロードして消し去る
         event.target.unloadModule("captions");
-        
-        // もしプレイヤー準備完了前にWebSocketで動画IDが届いていたら、ここで再生
         if (pendingVideoId) {
             loadNewVideo(pendingVideoId);
             pendingVideoId = null;
         }
     }
 
-    // 動画を新しく読み込む関数
+    // ★動画の状態が変わったときに呼ばれる関数
+    function onPlayerStateChange(event) {
+        // YT.PlayerState.PLAYING (値は 1) ＝ 動画の再生が実際に始まったとき
+        if (event.data === YT.PlayerState.PLAYING) {
+            // 再生が始まった瞬間に、字幕モジュールを強制的にアンロードする
+            event.target.unloadModule("captions");
+            console.log("動画再生を検知：字幕をオフにしました");
+        }
+    }
+
     function loadNewVideo(videoId) {
         if (player && typeof player.loadVideoById === 'function') {
-            // 字幕をアンロードしつつ、動画を読み込む
-            player.unloadModule("captions");
-            player.loadVideoById({ videoId: videoId });
+            // 動画切り替え時にも初期設定を引き継ぐ
+            player.loadVideoById({ 
+                videoId: videoId,
+                playerVars: { 'cc_load_policy': 0 }
+            });
         } else {
-            // APIの準備がまだの場合は一時保存しておく
             pendingVideoId = videoId;
         }
     }
 
-    // WebSocketのメッセージ受信処理
     ws.onmessage = (event) => {
         try {
             const res = JSON.parse(event.data);
-            
             if (res.type === "youtube") {
                 loadNewVideo(res.data);
             }
-            
-            // 将来のテロップ用拡張スペース
-            // if (res.type === "telop") { ... }
-
         } catch (e) {
             console.error("パースエラー:", e);
         }
