@@ -26,13 +26,15 @@ public class Main {
                 String message = ctx.message();
                 System.out.println("メッセージ受信: " + message);
 
-                for (WsContext client : clients) {
+                clients.forEach(client -> {
                     try {
                         client.send(message);
-                    } catch (Exception e) {
-                        clients.remove(client);
+                    } catch (Exception ignored) {
+                        // 後で removeIf で除去
                     }
-                }
+                });
+
+                clients.removeIf(client -> !client.session.isOpen());
             });
         });
 
