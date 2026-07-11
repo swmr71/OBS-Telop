@@ -14,12 +14,12 @@ public class Main {
         app.ws("/ws", ws -> {
             ws.onConnect(ctx -> {
                 clients.add(ctx);
-                System.out.println("新規接続: " + ctx.sessionId());
+                System.out.println("新規接続: " + ctx.session.getId());
             });
 
             ws.onClose(ctx -> {
                 clients.remove(ctx);
-                System.out.println("切断: " + ctx.sessionId());
+                System.out.println("切断: " + ctx.session.getId());
             });
 
             ws.onMessage(ctx -> {
