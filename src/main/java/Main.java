@@ -36,7 +36,7 @@ public class Main {
                 
                 // 接続されているすべてのブラウザへそのまま転送
                 for (WsContext client : clients) {
-                    if (client.session().isOpen()) {
+                    if (client.session.isOpen()) {
                         client.send(message);
                     }
                 }
